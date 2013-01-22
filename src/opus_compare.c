@@ -247,89 +247,21 @@ static const int BANDS[NBANDS+1]={
 #define TEST_WIN_SIZE (480)
 #define TEST_WIN_STEP (120)
 
-int main(int _argc,const char **_argv){
-  FILE    *fin1;
-  FILE    *fin2;
-  float   *x;
-  float   *y;
+static int
+verify(int nchannels, float *x, size_t xlength, float *y,
+       int yfreqs, int ybands, int downsample, int rate)
+{
   float   *xb;
   float   *X;
   float   *Y;
-  double    err;
-  float    Q;
-  size_t   xlength;
-  size_t   ylength;
-  size_t   nframes;
   size_t   xi;
   int      ci;
   int      xj;
   int      bi;
-  int      nchannels;
-  unsigned rate;
-  int      downsample;
-  int      ybands;
-  int      yfreqs;
   int      max_compare;
-  if(_argc<3||_argc>6){
-    fprintf(stderr,"Usage: %s [-s] [-r rate2] <file1.sw> <file2.sw>\n",
-     _argv[0]);
-    return EXIT_FAILURE;
-  }
-  nchannels=1;
-  if(strcmp(_argv[1],"-s")==0){
-    nchannels=2;
-    _argv++;
-  }
-  rate=48000;
-  ybands=NBANDS;
-  yfreqs=NFREQS;
-  downsample=1;
-  if(strcmp(_argv[1],"-r")==0){
-    rate=atoi(_argv[2]);
-    if(rate!=8000&&rate!=12000&&rate!=16000&&rate!=24000&&rate!=48000){
-      fprintf(stderr,
-       "Sampling rate must be 8000, 12000, 16000, 24000, or 48000\n");
-      return EXIT_FAILURE;
-    }
-    downsample=48000/rate;
-    switch(rate){
-      case  8000:ybands=13;break;
-      case 12000:ybands=15;break;
-      case 16000:ybands=17;break;
-      case 24000:ybands=19;break;
-    }
-    yfreqs=NFREQS/downsample;
-    _argv+=2;
-  }
-  fin1=fopen(_argv[1],"rb");
-  if(fin1==NULL){
-    fprintf(stderr,"Error opening '%s'.\n",_argv[1]);
-    return EXIT_FAILURE;
-  }
-  fin2=fopen(_argv[2],"rb");
-  if(fin2==NULL){
-    fprintf(stderr,"Error opening '%s'.\n",_argv[2]);
-    fclose(fin1);
-    return EXIT_FAILURE;
-  }
-  /*Read in the data and allocate scratch space.*/
-  xlength=read_pcm16(&x,fin1,2);
-  if(nchannels==1){
-    for(xi=0;xi<xlength;xi++)x[xi]=.5*(x[2*xi]+x[2*xi+1]);
-  }
-  fclose(fin1);
-  ylength=read_pcm16(&y,fin2,nchannels);
-  fclose(fin2);
-  if(xlength!=ylength*downsample){
-    fprintf(stderr,"Sample counts do not match (%lu!=%lu).\n",
-     (unsigned long)xlength,(unsigned long)ylength*downsample);
-    return EXIT_FAILURE;
-  }
-  if(xlength<TEST_WIN_SIZE){
-    fprintf(stderr,"Insufficient sample data (%lu<%i).\n",
-     (unsigned long)xlength,TEST_WIN_SIZE);
-    return EXIT_FAILURE;
-  }
+  double    err;
+  float    Q;
+  size_t nframes;
   nframes=(xlength-TEST_WIN_SIZE+TEST_WIN_STEP)/TEST_WIN_STEP;
   xb=(float *)opus_malloc(nframes*NBANDS*nchannels*sizeof(*xb));
   X=(float *)opus_malloc(nframes*NFREQS*nchannels*sizeof(*X));
@@ -461,4 +393,71 @@ int main(int _argc,const char **_argv){
      "Opus quality metric: %.1f %% (internal weighted error is %f)\n",Q,err);
     return EXIT_SUCCESS;
   }
+}
+
+int main(int _argc,const char **_argv){
+  FILE    *fin1;
+  FILE    *fin2;
+  float   *x;
+  float   *y;
+  size_t   xlength;
+  size_t   ylength;
+  size_t   xi;
+  int      nchannels;
+  unsigned rate;
+  int      downsample;
+  int      ybands;
+  int      yfreqs;
+  if(_argc<3||_argc>6){
+    fprintf(stderr,"Usage: %s [-s] [-r rate2] <file1.sw> <file2.sw>\n",
+     _argv[0]);
+    return EXIT_FAILURE;
+  }
+  nchannels=1;
+  if(strcmp(_argv[1],"-s")==0){
+    nchannels=2;
+    _argv++;
+  }
+  rate=48000;
+  ybands=NBANDS;
+  yfreqs=NFREQS;
+  downsample=1;
+  if(strcmp(_argv[1],"-r")==0){
+    rate=atoi(_argv[2]);
+    compute_ebands(rate, 480, rate / 480, &ybands);
+    downsample=48000/rate;
+    yfreqs=NFREQS/downsample;
+    _argv+=2;
+  }
+  fin1=fopen(_argv[1],"rb");
+  if(fin1==NULL){
+    fprintf(stderr,"Error opening '%s'.\n",_argv[1]);
+    return EXIT_FAILURE;
+  }
+  fin2=fopen(_argv[2],"rb");
+  if(fin2==NULL){
+    fprintf(stderr,"Error opening '%s'.\n",_argv[2]);
+    fclose(fin1);
+    return EXIT_FAILURE;
+  }
+  /*Read in the data and allocate scratch space.*/
+  xlength=read_pcm16(&x,fin1,2);
+  if(nchannels==1){
+    for(xi=0;xi<xlength;xi++)x[xi]=.5*(x[2*xi]+x[2*xi+1]);
+  }
+  fclose(fin1);
+  ylength=read_pcm16(&y,fin2,nchannels);
+  fclose(fin2);
+  if(xlength!=ylength*downsample){
+    fprintf(stderr,"Sample counts do not match (%lu!=%lu).\n",
+     (unsigned long)xlength,(unsigned long)ylength*downsample);
+    return EXIT_FAILURE;
+  }
+  if(xlength<TEST_WIN_SIZE){
+    fprintf(stderr,"Insufficient sample data (%lu<%i).\n",
+     (unsigned long)xlength,TEST_WIN_SIZE);
+    return EXIT_FAILURE;
+  }
+
+  return verify(nchannels, x, xlength, y, yfreqs, ybands, downsample, rate);
 }
