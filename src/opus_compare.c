@@ -418,17 +418,15 @@ int main(int _argc,const char **_argv){
     nchannels=2;
     _argv++;
   }
-  rate=48000;
-  ybands=NBANDS;
-  yfreqs=NFREQS;
-  downsample=1;
-  if(strcmp(_argv[1],"-r")==0){
-    rate=atoi(_argv[2]);
-    compute_ebands(rate, 480, rate / 480, &ybands);
-    downsample=48000/rate;
-    yfreqs=NFREQS/downsample;
-    _argv+=2;
+  if(strcmp(_argv[1],"-r")!=0){
+    fprintf(stderr,"-r is required\n");
+    return EXIT_FAILURE;
   }
+  rate=atoi(_argv[2]);
+  compute_ebands(rate, 480, rate / 480, &ybands);
+  downsample=48000/rate;
+  yfreqs=NFREQS/downsample;
+  _argv+=2;
   fin1=fopen(_argv[1],"rb");
   if(fin1==NULL){
     fprintf(stderr,"Error opening '%s'.\n",_argv[1]);
