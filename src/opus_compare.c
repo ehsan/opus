@@ -150,6 +150,91 @@ static void band_energy(float *_out,float *_ps,const int *_bands,int _nbands,
   free(window);
 }
 
+static const short eband5ms[] = {
+/*0  200 400 600 800  1k 1.2 1.4 1.6  2k 2.4 2.8 3.2  4k 4.8 5.6 6.8  8k 9.6 12k 15.6 */
+  0,  1,  2,  3,  4,  5,  6,  7,  8, 10, 12, 14, 16, 20, 24, 28, 34, 40, 48, 60, 78, 100
+};
+
+/* Defining 25 critical bands for the full 0-20 kHz audio bandwidth
+   Taken from http://ccrma.stanford.edu/~jos/bbt/Bark_Frequency_Scale.html */
+#define BARK_BANDS 25
+static const short bark_freq[BARK_BANDS+1] = {
+      0,   100,   200,   300,   400,
+    510,   630,   770,   920,  1080,
+   1270,  1480,  1720,  2000,  2320,
+   2700,  3150,  3700,  4400,  5300,
+   6400,  7700,  9500, 12000, 15500,
+  20000};
+
+static short *compute_ebands(int Fs, int frame_size, int res, int *nbEBands)
+{
+   short *eBands;
+   int i, j, lin, low, high, nBark, offset=0;
+
+   /* All modes that have 2.5 ms short blocks use the same definition */
+   if (Fs == 400*(int)frame_size)
+   {
+      *nbEBands = sizeof(eband5ms)/sizeof(eband5ms[0])-1;
+      eBands = opus_malloc(sizeof(short)*(*nbEBands+1));
+      for (i=0;i<*nbEBands+1;i++)
+         eBands[i] = eband5ms[i];
+      return eBands;
+   }
+   /* Find the number of critical bands supported by our sampling rate */
+   for (nBark=1;nBark<BARK_BANDS;nBark++)
+    if (bark_freq[nBark+1]*2 >= Fs)
+       break;
+
+   /* Find where the linear part ends (i.e. where the spacing is more than min_width */
+   for (lin=0;lin<nBark;lin++)
+      if (bark_freq[lin+1]-bark_freq[lin] >= res)
+         break;
+
+   low = (bark_freq[lin]+res/2)/res;
+   high = nBark-lin;
+   *nbEBands = low+high;
+   eBands = opus_malloc(sizeof(short)*(*nbEBands+2));
+
+   if (eBands==NULL)
+      return NULL;
+
+   /* Linear spacing (min_width) */
+   for (i=0;i<low;i++)
+      eBands[i] = i;
+   if (low>0)
+      offset = eBands[low-1]*res - bark_freq[lin-1];
+   /* Spacing follows critical bands */
+   for (i=0;i<high;i++)
+   {
+      int target = bark_freq[lin+i];
+      /* Round to an even value */
+      eBands[i+low] = (target+offset/2+res)/(2*res)*2;
+      offset = eBands[i+low]*res - target;
+   }
+   /* Enforce the minimum spacing at the boundary */
+   for (i=0;i<*nbEBands;i++)
+      if (eBands[i] < i)
+         eBands[i] = i;
+   /* Round to an even value */
+   eBands[*nbEBands] = (bark_freq[nBark]+res)/(2*res)*2;
+   if (eBands[*nbEBands] > frame_size)
+      eBands[*nbEBands] = frame_size;
+   for (i=1;i<*nbEBands-1;i++)
+   {
+      if (eBands[i+1]-eBands[i] < eBands[i]-eBands[i-1])
+      {
+         eBands[i] -= (2*eBands[i]-eBands[i-1]-eBands[i+1])/2;
+      }
+   }
+   /* Remove any empty bands. */
+   for (i=j=0;i<*nbEBands;i++)
+      if(eBands[i+1]>eBands[j])
+         eBands[++j]=eBands[i+1];
+   *nbEBands=j;
+
+   return eBands;
+}
+
 #define NBANDS (21)
 #define NFREQS (240)
 
