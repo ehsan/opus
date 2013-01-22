@@ -249,7 +249,7 @@ static const int BANDS[NBANDS+1]={
 
 static int
 verify(int nchannels, float *x, size_t xlength, float *y,
-       int yfreqs, int ybands, int downsample, int rate)
+       unsigned rate)
 {
   float   *xb;
   float   *X;
@@ -262,6 +262,13 @@ verify(int nchannels, float *x, size_t xlength, float *y,
   double    err;
   float    Q;
   size_t nframes;
+  int      downsample;
+  int      ybands;
+  int      yfreqs;
+  compute_ebands(rate, 480, rate / 480, &ybands);
+  downsample=48000/rate;
+  yfreqs=NFREQS/downsample;
+
   nframes=(xlength-TEST_WIN_SIZE+TEST_WIN_STEP)/TEST_WIN_STEP;
   xb=(float *)opus_malloc(nframes*NBANDS*nchannels*sizeof(*xb));
   X=(float *)opus_malloc(nframes*NFREQS*nchannels*sizeof(*X));
@@ -405,9 +412,6 @@ int main(int _argc,const char **_argv){
   size_t   xi;
   int      nchannels;
   unsigned rate;
-  int      downsample;
-  int      ybands;
-  int      yfreqs;
   if(_argc<3||_argc>6){
     fprintf(stderr,"Usage: %s [-s] [-r rate2] <file1.sw> <file2.sw>\n",
      _argv[0]);
@@ -423,9 +427,6 @@ int main(int _argc,const char **_argv){
     return EXIT_FAILURE;
   }
   rate=atoi(_argv[2]);
-  compute_ebands(rate, 480, rate / 480, &ybands);
-  downsample=48000/rate;
-  yfreqs=NFREQS/downsample;
   _argv+=2;
   fin1=fopen(_argv[1],"rb");
   if(fin1==NULL){
@@ -446,16 +447,11 @@ int main(int _argc,const char **_argv){
   fclose(fin1);
   ylength=read_pcm16(&y,fin2,nchannels);
   fclose(fin2);
-  if(xlength!=ylength*downsample){
-    fprintf(stderr,"Sample counts do not match (%lu!=%lu).\n",
-     (unsigned long)xlength,(unsigned long)ylength*downsample);
-    return EXIT_FAILURE;
-  }
   if(xlength<TEST_WIN_SIZE){
     fprintf(stderr,"Insufficient sample data (%lu<%i).\n",
      (unsigned long)xlength,TEST_WIN_SIZE);
     return EXIT_FAILURE;
   }
 
-  return verify(nchannels, x, xlength, y, yfreqs, ybands, downsample, rate);
+  return verify(nchannels, x, xlength, y, rate);
 }
