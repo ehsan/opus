@@ -265,6 +265,7 @@ verify(int nchannels, float *x, size_t xlength, float *y,
   int      downsample;
   int      ybands;
   int      yfreqs;
+  // TODO: do similar adjustments for X as well
   compute_ebands(rate, 480, rate / 480, &ybands);
   downsample=48000/rate;
   yfreqs=NFREQS/downsample;
@@ -276,7 +277,7 @@ verify(int nchannels, float *x, size_t xlength, float *y,
   /*Compute the per-band spectral energy of the original signal
      and the error.*/
   band_energy(xb,X,BANDS,NBANDS,x,nchannels,nframes,
-   TEST_WIN_SIZE,TEST_WIN_STEP,1);
+   TEST_WIN_SIZE/downsample,TEST_WIN_STEP/downsample,downsample);
   free(x);
   band_energy(NULL,Y,BANDS,ybands,y,nchannels,nframes,
    TEST_WIN_SIZE/downsample,TEST_WIN_STEP/downsample,downsample);
